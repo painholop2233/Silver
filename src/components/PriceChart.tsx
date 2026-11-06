@@ -4,6 +4,7 @@ import { CurrencyUnit } from './Header';
 import { Layers, RefreshCw, Zap, TrendingUp, TrendingDown, Clock } from 'lucide-react';
 import { InfoButton } from './HelpModal';
 import { CandleInterval, fetchCandles, RealtimeQuoteResponse } from '../services/marketApi';
+import { TInvestFutureInstrument } from '../data/tinkoffFuturesData';
 
 interface PriceChartProps {
   prices: PricePoint[];
@@ -11,6 +12,7 @@ interface PriceChartProps {
   realtimeQuote?: RealtimeQuoteResponse | null;
   onRefreshLive?: () => void;
   isLoadingLive?: boolean;
+  selectedInstrument?: TInvestFutureInstrument;
 }
 
 export type TimeRange1D = '1M' | '3M' | '6M' | '1Y' | 'ALL';
@@ -21,6 +23,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
   realtimeQuote,
   onRefreshLive,
   isLoadingLive,
+  selectedInstrument,
 }) => {
   // Timeframe state: 5m, 15m, 1h, 4h, 1d
   const [selectedInterval, setSelectedInterval] = useState<CandleInterval>('1d');
@@ -40,45 +43,54 @@ export const PriceChart: React.FC<PriceChartProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Currency multiplier
+  // Currency multiplier adapted to contract unit (USD/oz vs RUB/g)
   const multiplier = useMemo(() => {
+    const isRubContract = selectedInstrument?.unit === 'RUB/g';
+    if (isRubContract) {
+      switch (currencyUnit) {
+        case 'RUB_G': return 1;
+        case 'USD_OZ': return 31.1035 / 92.5;
+        case 'EUR_OZ': return (31.1035 / 92.5) * 0.925;
+        case 'USD_KG': return 1000 / 92.5;
+      }
+    }
     switch (currencyUnit) {
       case 'USD_OZ': return 1;
       case 'EUR_OZ': return 0.925;
       case 'USD_KG': return 1000 / 31.1035;
       case 'RUB_G': return 92.5 / 31.1035;
     }
-  }, [currencyUnit]);
+  }, [currencyUnit, selectedInstrument]);
 
-  const unitPrefix = currencyUnit === 'USD_OZ' || currencyUnit === 'USD_KG' ? '$' : currencyUnit === 'EUR_OZ' ? '€' : '₽';
-  const unitSuffix = currencyUnit === 'USD_OZ' ? ' $/oz' : currencyUnit === 'EUR_OZ' ? ' €/oz' : currencyUnit === 'USD_KG' ? ' $/kg' : ' ₽/g';
+  const unitPrefix =
+    currencyUnit === 'USD_OZ' || currencyUnit === 'USD_KG' ? '$' : currencyUnit === 'EUR_OZ' ? '€' : '₽';
+  const unitSuffix =
+    currencyUnit === 'USD_OZ' ? ' $/oz' : currencyUnit === 'EUR_OZ' ? ' €/oz' : currencyUnit === 'USD_KG' ? ' $/kg' : ' ₽/g';
 
-  // Load candles when interval changes
+  // Load candles when interval or instrument changes
   const loadTimeframeCandles = useCallback(async (interval: CandleInterval) => {
-    if (interval === '1d') {
-      if (initialPrices && initialPrices.length > 0) {
-        setCandles(initialPrices);
-      }
-      return;
-    }
-
     setIsLoadingCandles(true);
     try {
-      const data = await fetchCandles(interval);
+      const data = await fetchCandles(interval, selectedInstrument?.ticker);
       if (data && data.length > 0) {
         setCandles(data);
+      } else if (interval === '1d' && initialPrices && initialPrices.length > 0) {
+        setCandles(initialPrices);
       }
     } catch (err) {
-      console.warn(`Failed to load ${interval} candles:`, err);
+      console.warn(`Failed to load ${interval} candles for ${selectedInstrument?.ticker}:`, err);
+      if (interval === '1d' && initialPrices && initialPrices.length > 0) {
+        setCandles(initialPrices);
+      }
     } finally {
       setIsLoadingCandles(false);
     }
-  }, [initialPrices]);
+  }, [initialPrices, selectedInstrument?.ticker]);
 
-  // Trigger load when selectedInterval changes
+  // Trigger load when selectedInterval or contract changes
   useEffect(() => {
     loadTimeframeCandles(selectedInterval);
-  }, [selectedInterval, loadTimeframeCandles]);
+  }, [selectedInterval, selectedInstrument?.ticker, loadTimeframeCandles]);
 
   // Keep daily candles synced if initialPrices update from parent
   useEffect(() => {
@@ -354,7 +366,11 @@ export const PriceChart: React.FC<PriceChartProps> = ({
                 </span>
               </div>
               <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5 font-mono">
-                <span className="text-cyan-300 font-semibold">ПОСЛЕДНЯЯ КОТИРОВКА (SVZ6)</span>
+                <span className="text-cyan-300 font-semibold">
+                  ПОСЛЕДНЯЯ КОТИРОВКА ({selectedInstrument?.ticker || 'SVZ6'})
+                </span>
+                <span aria-hidden="true">·</span>
+                <span className="text-slate-300">{selectedInstrument?.shortName || 'Фьючерс Серебро'}</span>
                 <span aria-hidden="true">·</span>
                 <span>Т-Банк Open API</span>
                 {realtimeQuote?.timestamp && (

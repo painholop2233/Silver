@@ -15,14 +15,24 @@ import { HelpProvider, InfoButton } from './components/HelpModal';
 import {
   fetchLiveQuote,
   fetchMoexHistory,
+  fetchCandles,
   RealtimeQuoteResponse,
 } from './services/marketApi';
+import {
+  TInvestFutureInstrument,
+  DEFAULT_FUTURES_INSTRUMENT,
+} from './data/tinkoffFuturesData';
 
 export default function App() {
   const [currencyUnit, setCurrencyUnit] = useState<CurrencyUnit>('USD_OZ');
   const [activeTab, setActiveTab] = useState<string>('price_volatility');
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isOrderBookOpen, setIsOrderBookOpen] = useState(false);
+
+  // Active futures contract from T-Investments
+  const [selectedInstrument, setSelectedInstrument] = useState<TInvestFutureInstrument>(
+    DEFAULT_FUTURES_INSTRUMENT
+  );
 
   // Market data states
   const [prices, setPrices] = useState<PricePoint[]>(silverPrices);
@@ -31,32 +41,40 @@ export default function App() {
   const [isLoadingLive, setIsLoadingLive] = useState(false);
   const [moexCandlesCount, setMoexCandlesCount] = useState(0);
 
-  // Load MOEX History on mount
+  // Switch selected futures contract and adapt currency/candles
+  const handleSelectInstrument = useCallback((instr: TInvestFutureInstrument) => {
+    setSelectedInstrument(instr);
+    if (instr.defaultCurrencyUnit) {
+      setCurrencyUnit(instr.defaultCurrencyUnit);
+    }
+  }, []);
+
+  // Load contract historical candles when selectedInstrument changes
   useEffect(() => {
     let isMounted = true;
-    async function loadMoexData() {
+    async function loadContractData() {
       try {
-        const moexPoints = await fetchMoexHistory();
-        if (isMounted && moexPoints.length > 0) {
-          setPrices(moexPoints);
-          setMoexCandlesCount(moexPoints.length);
+        const candles = await fetchCandles('1d', selectedInstrument.ticker);
+        if (isMounted && candles.length > 0) {
+          setPrices(candles);
+          setMoexCandlesCount(candles.length);
         }
       } catch (err) {
-        console.warn('Using baseline series as MOEX history loads:', err);
+        console.warn(`Using baseline series for ${selectedInstrument.ticker}:`, err);
       }
     }
 
-    loadMoexData();
+    loadContractData();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [selectedInstrument.ticker]);
 
-  // Fetch live quote from T-Bank API
+  // Fetch live quote from T-Bank API for active instrument
   const refreshQuote = useCallback(async () => {
     setIsLoadingLive(true);
     try {
-      const quote = await fetchLiveQuote();
+      const quote = await fetchLiveQuote(selectedInstrument.ticker);
       if (quote && quote.success) {
         setRealtimeQuote(quote);
         setIsLiveConnected(true);
@@ -81,7 +99,7 @@ export default function App() {
     } finally {
       setIsLoadingLive(false);
     }
-  }, []);
+  }, [selectedInstrument.ticker]);
 
   // Poll live quote every 12 seconds
   useEffect(() => {
@@ -111,6 +129,8 @@ export default function App() {
           onOpenOrderBook={() => setIsOrderBookOpen(true)}
           onRefreshLive={refreshQuote}
           moexCandlesCount={moexCandlesCount}
+          selectedInstrument={selectedInstrument}
+          onSelectInstrument={handleSelectInstrument}
         />
 
         {/* Main Viewport Container */}
@@ -125,6 +145,7 @@ export default function App() {
                 realtimeQuote={realtimeQuote}
                 onRefreshLive={refreshQuote}
                 isLoadingLive={isLoadingLive}
+                selectedInstrument={selectedInstrument}
               />
 
               {/* Volatility Deep Dive Section */}
@@ -140,6 +161,7 @@ export default function App() {
                 volatility30d={currentPrice.volatility30d || 26.5}
                 currencyUnit={currencyUnit}
                 realtimeQuote={realtimeQuote}
+                selectedInstrument={selectedInstrument}
               />
             </div>
           )}

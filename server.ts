@@ -92,16 +92,24 @@ function makeHttpsRequest<T>(options: https.RequestOptions, bodyData?: string): 
 }
 
 // Fetch live quote from T-Bank Invest API
-async function fetchTinkoffQuotes() {
-  const instruments = [
-    { uid: 'e889c757-ce26-46b1-a908-2565fd5e134a', ticker: 'SVZ6', name: 'Фьючерс Серебро 12.26 (MOEX)', type: 'FUTURES', unit: 'USD/oz' },
-    { uid: '7cf6a4a8-89cd-4d8b-92c1-0494c206a85c', ticker: 'XAG', name: 'Серебро Спот (USD)', type: 'COMMODITY', unit: 'USD/oz' },
-    { uid: 'd6240afe-4e9c-49b6-8835-629f431c8506', ticker: 'SLVRUB_TOM', name: 'Серебро Спот MOEX (RUB)', type: 'COMMODITY', unit: 'RUB/g' },
-    { uid: '03e5c7cd-6d62-4396-9786-aeb828a5ddfa', ticker: 'SLVRUBF', name: 'Вечный фьючерс Серебро (RUB)', type: 'FUTURES', unit: 'RUB/g' },
-  ];
+// Full list of silver & precious metal futures traded on T-Investments
+const TBANK_INSTRUMENTS = [
+  { uid: 'e889c757-ce26-46b1-a908-2565fd5e134a', ticker: 'SVZ6', name: 'SILV-12.26 Серебро (MOEX FORTS)', type: 'FUTURES', unit: 'USD/oz' },
+  { uid: '03e5c7cd-6d62-4396-9786-aeb828a5ddfa', ticker: 'SLVRUBF', name: 'SLVRUBF Вечный фьючерс Серебро (RUB)', type: 'FUTURES', unit: 'RUB/g' },
+  { uid: 'b023e155-889b-491a-9769-cd14aa6e8d89', ticker: 'SVH7', name: 'SILV-3.27 Серебро (MOEX FORTS)', type: 'FUTURES', unit: 'USD/oz' },
+  { uid: '6be7fe9c-0653-4919-9385-772c4604aaba', ticker: 'S2Z6', name: 'SL-12.26 Серебро поставочный (rub)', type: 'FUTURES', unit: 'RUB/g' },
+  { uid: 'c6403e35-bfc7-40a4-969a-89902f30aafa', ticker: 'S1Z6', name: 'SILVM-12.26 Серебро Мини (MOEX)', type: 'FUTURES', unit: 'USD/oz' },
+  { uid: 'fab45dde-3bed-4d74-9316-0f7ee46c5bdd', ticker: 'S2H7', name: 'SL-3.27 Серебро поставочный (rub)', type: 'FUTURES', unit: 'RUB/g' },
+  { uid: '176e148c-7666-462e-b33d-c9bdc859fc38', ticker: 'SVM7', name: 'SILV-6.27 Серебро (MOEX FORTS)', type: 'FUTURES', unit: 'USD/oz' },
+  { uid: 'de46047a-3989-4bf8-9606-a6b0e6ee3cfc', ticker: 'S1H7', name: 'SILVM-3.27 Серебро Мини (MOEX)', type: 'FUTURES', unit: 'USD/oz' },
+  { uid: 'd6240afe-4e9c-49b6-8835-629f431c8506', ticker: 'SLVRUB_TOM', name: 'Серебро Спот MOEX (RUB)', type: 'COMMODITY', unit: 'RUB/g' },
+  { uid: '7cf6a4a8-89cd-4d8b-92c1-0494c206a85c', ticker: 'XAG', name: 'Серебро Спот Лондон (USD)', type: 'COMMODITY', unit: 'USD/oz' },
+];
 
+// Fetch live quotes from T-Bank Invest API
+async function fetchTinkoffQuotes(requestedTicker: string = 'SVZ6') {
   const payload = JSON.stringify({
-    instrumentId: instruments.map((i) => i.uid),
+    instrumentId: TBANK_INSTRUMENTS.map((i) => i.uid),
   });
 
   const priceData: any = await makeHttpsRequest(
@@ -117,11 +125,14 @@ async function fetchTinkoffQuotes() {
     payload
   );
 
-  // Fetch OrderBook for SVZ6
+  // Target instrument for OrderBook
+  const targetInstr = TBANK_INSTRUMENTS.find((i) => i.ticker.toUpperCase() === requestedTicker.toUpperCase()) || TBANK_INSTRUMENTS[0];
+
+  // Fetch OrderBook for active instrument
   let orderBook: any = null;
   try {
     const obPayload = JSON.stringify({
-      instrumentId: 'e889c757-ce26-46b1-a908-2565fd5e134a',
+      instrumentId: targetInstr.uid,
       depth: 10,
     });
     orderBook = await makeHttpsRequest(
@@ -137,13 +148,13 @@ async function fetchTinkoffQuotes() {
       obPayload
     );
   } catch (err) {
-    console.warn('Failed to fetch orderbook for SVZ6:', err);
+    console.warn(`Failed to fetch orderbook for ${targetInstr.ticker}:`, err);
   }
 
   const quotesMap: Record<string, any> = {};
   if (priceData && priceData.lastPrices) {
     for (const item of priceData.lastPrices) {
-      const instr = instruments.find((i) => i.uid === item.instrumentUid);
+      const instr = TBANK_INSTRUMENTS.find((i) => i.uid === item.instrumentUid);
       if (instr) {
         quotesMap[instr.ticker] = {
           ticker: instr.ticker,
@@ -172,12 +183,14 @@ async function fetchTinkoffQuotes() {
   const bestAsk = formattedAsks.length > 0 ? formattedAsks[0].price : null;
   const spread = bestBid && bestAsk ? Number((bestAsk - bestBid).toFixed(4)) : null;
 
+  const active = quotesMap[targetInstr.ticker] || quotesMap['SVZ6'] || { ticker: 'SVZ6', price: 52.59, unit: 'USD/oz' };
+
   return {
     success: true,
     provider: 'T-Bank Invest API v1 (Live)',
     timestamp: new Date().toISOString(),
     quotes: quotesMap,
-    activeContract: quotesMap['SVZ6'] || { ticker: 'SVZ6', price: 54.12, unit: 'USD/oz' },
+    activeContract: active,
     spotXag: quotesMap['XAG'] || { ticker: 'XAG', price: 52.17, unit: 'USD/oz' },
     orderBook: {
       instrument: 'SVZ6 (Silver 12.26)',
@@ -384,15 +397,19 @@ async function getMoexHistoricalSeries(): Promise<MoexCandle[]> {
 const intradayCandlesCache = new Map<string, { timestamp: number; data: MoexCandle[] }>();
 const INTRADAY_CACHE_TTL = 15 * 1000;
 
-async function fetchTinkoffIntradayCandles(intervalStr: string, daysBack: number): Promise<MoexCandle[]> {
-  const cacheKey = `${intervalStr}_${daysBack}`;
+async function fetchTinkoffIntradayCandles(
+  intervalStr: string,
+  daysBack: number,
+  instrumentUid: string = 'e889c757-ce26-46b1-a908-2565fd5e134a'
+): Promise<MoexCandle[]> {
+  const cacheKey = `${instrumentUid}_${intervalStr}_${daysBack}`;
   const cached = intradayCandlesCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < INTRADAY_CACHE_TTL) {
     return cached.data;
   }
 
   const payload = JSON.stringify({
-    instrumentId: 'e889c757-ce26-46b1-a908-2565fd5e134a', // SVZ6
+    instrumentId: instrumentUid,
     from: new Date(Date.now() - daysBack * 24 * 3600 * 1000).toISOString(),
     to: new Date().toISOString(),
     interval: intervalStr,
@@ -501,7 +518,8 @@ async function fetchTinkoffIntradayCandles(intervalStr: string, daysBack: number
 // API Routes
 app.get('/api/realtime/quote', async (req: Request, res: Response) => {
   try {
-    const data = await fetchTinkoffQuotes();
+    const ticker = (req.query.ticker as string) || 'SVZ6';
+    const data = await fetchTinkoffQuotes(ticker);
     res.json(data);
   } catch (error: any) {
     console.error('Error fetching Tinkoff quote:', error);
@@ -515,25 +533,36 @@ app.get('/api/realtime/quote', async (req: Request, res: Response) => {
 
 app.get('/api/candles', async (req: Request, res: Response) => {
   const timeframe = (req.query.timeframe as string) || '1d';
+  const ticker = (req.query.ticker as string) || 'SVZ6';
+  const targetInstr = TBANK_INSTRUMENTS.find((i) => i.ticker.toUpperCase() === ticker.toUpperCase()) || TBANK_INSTRUMENTS[0];
+
   try {
     let candles: MoexCandle[] = [];
     let provider = 'T-Bank Open API';
     if (timeframe === '5m') {
-      candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_5_MIN', 2);
+      candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_5_MIN', 2, targetInstr.uid);
     } else if (timeframe === '15m') {
-      candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_15_MIN', 5);
+      candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_15_MIN', 5, targetInstr.uid);
     } else if (timeframe === '1h') {
-      candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_HOUR', 20);
+      candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_HOUR', 20, targetInstr.uid);
     } else if (timeframe === '4h') {
-      candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_4_HOUR', 60);
+      candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_4_HOUR', 60, targetInstr.uid);
     } else {
-      provider = 'Moscow Exchange (MOEX ISS FORTS API)';
-      candles = await getMoexHistoricalSeries();
+      // 1d
+      if (targetInstr.ticker === 'SVZ6') {
+        provider = 'Moscow Exchange (MOEX ISS FORTS API)';
+        candles = await getMoexHistoricalSeries();
+      } else {
+        provider = 'T-Bank Open API (Daily)';
+        candles = await fetchTinkoffIntradayCandles('CANDLE_INTERVAL_DAY', 365, targetInstr.uid);
+      }
     }
 
     res.json({
       success: true,
       timeframe,
+      ticker: targetInstr.ticker,
+      unit: targetInstr.unit,
       provider,
       count: candles.length,
       firstDate: candles[0]?.date,
@@ -545,6 +574,7 @@ app.get('/api/candles', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       timeframe,
+      ticker: targetInstr.ticker,
       error: error.message || 'Failed to fetch candles',
       candles: [],
     });

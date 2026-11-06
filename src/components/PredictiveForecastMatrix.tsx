@@ -31,12 +31,14 @@ import {
 import { CurrencyUnit } from './Header';
 import { InfoButton } from './HelpModal';
 import { RealtimeQuoteResponse } from '../services/marketApi';
+import { TInvestFutureInstrument } from '../data/tinkoffFuturesData';
 
 interface PredictiveForecastMatrixProps {
   currentPriceUsd: number;
   volatility30d: number;
   currencyUnit: CurrencyUnit;
   realtimeQuote: RealtimeQuoteResponse | null;
+  selectedInstrument: TInvestFutureInstrument;
 }
 
 export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> = ({
@@ -44,6 +46,7 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
   volatility30d,
   currencyUnit,
   realtimeQuote,
+  selectedInstrument,
 }) => {
   const [factors, setFactors] = useState<ForecastFactor[]>(baselineForecastFactors);
   const [activePreset, setActivePreset] = useState<string>('balanced');
@@ -63,12 +66,34 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
     }
   };
 
-  const unitLabel = {
-    USD_OZ: '$/oz',
-    EUR_OZ: '€/oz',
-    USD_KG: '$/kg',
-    RUB_G: '₽/g',
-  }[currencyUnit];
+  const formatDisplayPrice = (val: number): string => {
+    if (selectedInstrument.unit === 'RUB/g') {
+      if (currencyUnit === 'RUB_G') return `${val.toFixed(2)} ₽/г`;
+      if (currencyUnit === 'USD_OZ') return `$${((val * 31.1035) / 92.5).toFixed(2)}`;
+      if (currencyUnit === 'EUR_OZ') return `€${(((val * 31.1035) / 92.5) * 0.925).toFixed(2)}`;
+      if (currencyUnit === 'USD_KG') return `$${((val * 1000) / 92.5).toFixed(0)}`;
+      return `${val.toFixed(2)} ₽/г`;
+    }
+    return formatPrice(val);
+  };
+
+  const unitLabel =
+    selectedInstrument.unit === 'RUB/g' && currencyUnit === 'RUB_G'
+      ? '₽/г'
+      : {
+          USD_OZ: '$/oz',
+          EUR_OZ: '€/oz',
+          USD_KG: '$/kg',
+          RUB_G: '₽/g',
+        }[currencyUnit];
+
+  // Effective price of the selected instrument (in native points)
+  const effectiveBasePrice = useMemo(() => {
+    const livePrice = realtimeQuote?.quotes?.[selectedInstrument.ticker]?.price;
+    if (livePrice && livePrice > 0) return livePrice;
+    if (selectedInstrument.unit === 'RUB/g') return 138.27;
+    return currentPriceUsd > 0 ? currentPriceUsd : 52.59;
+  }, [realtimeQuote, selectedInstrument, currentPriceUsd]);
 
   // Apply a preset
   const handleApplyPreset = (presetId: string) => {
@@ -99,10 +124,10 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
   // Calculate composite score
   const composite = useMemo(() => calculateCompositeScore(factors), [factors]);
 
-  // Generate short-term & long-term forecasts dynamically
+  // Generate short-term & long-term forecasts dynamically adapted to selected contract price
   const { shortTerm, mediumLongTerm } = useMemo(
-    () => generateHorizonForecasts(currentPriceUsd, volatility30d, composite.score),
-    [currentPriceUsd, volatility30d, composite.score]
+    () => generateHorizonForecasts(effectiveBasePrice, volatility30d, composite.score),
+    [effectiveBasePrice, volatility30d, composite.score]
   );
 
   const totalWeights = factors.reduce((sum, f) => sum + f.weight, 0);
@@ -123,7 +148,7 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
                 Институциональный Моделинг
               </span>
               <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                Фьючерс: {formatPrice(currentPriceUsd)} {unitLabel}
+                Контракт: {selectedInstrument.ticker} ({formatDisplayPrice(effectiveBasePrice)})
               </span>
               <InfoButton topicId="predictive_composite_index" title="Справка: композитный индекс прогнозирования" />
             </div>
@@ -346,7 +371,7 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
                       </div>
                       <div className="flex items-baseline gap-2 mt-0.5">
                         <span className="text-xl font-extrabold font-mono text-white">
-                          {formatPrice(horizon.baseExpectedPriceUsd)}
+                          {formatDisplayPrice(horizon.baseExpectedPriceUsd)}
                         </span>
                         <span
                           className={`text-xs font-mono font-bold flex items-center ${
@@ -368,11 +393,11 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
                     <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 space-y-1.5 text-xs font-mono">
                       <div className="flex justify-between text-slate-400 text-[11px]">
                         <span>Поддержка S1:</span>
-                        <span className="text-slate-300 font-semibold">{formatPrice(horizon.supportLevelUsd)}</span>
+                        <span className="text-slate-300 font-semibold">{formatDisplayPrice(horizon.supportLevelUsd)}</span>
                       </div>
                       <div className="flex justify-between text-slate-400 text-[11px]">
                         <span>Сопротивление R1:</span>
-                        <span className="text-slate-300 font-semibold">{formatPrice(horizon.resistanceLevelUsd)}</span>
+                        <span className="text-slate-300 font-semibold">{formatDisplayPrice(horizon.resistanceLevelUsd)}</span>
                       </div>
                       <div className="flex justify-between text-slate-400 text-[11px]">
                         <span>Диапазон σ:</span>
@@ -475,7 +500,7 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
                       </div>
                       <div className="flex items-baseline gap-2 mt-0.5">
                         <span className="text-2xl font-extrabold font-mono text-white">
-                          {formatPrice(horizon.baseExpectedPriceUsd)}
+                          {formatDisplayPrice(horizon.baseExpectedPriceUsd)}
                         </span>
                         <span
                           className={`text-xs font-mono font-bold flex items-center ${
@@ -500,14 +525,14 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
                           Пессимистичный:
                         </span>
-                        <span className="text-slate-200 font-semibold">{formatPrice(horizon.bearTargetUsd)}</span>
+                        <span className="text-slate-200 font-semibold">{formatDisplayPrice(horizon.bearTargetUsd)}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-emerald-400 flex items-center gap-1 text-[11px]">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                           Оптимистичный:
                         </span>
-                        <span className="text-slate-200 font-semibold">{formatPrice(horizon.bullTargetUsd)}</span>
+                        <span className="text-slate-200 font-semibold">{formatDisplayPrice(horizon.bullTargetUsd)}</span>
                       </div>
                       <div className="flex justify-between items-center text-slate-400 text-[11px] pt-1 border-t border-slate-800/60">
                         <span>Волатильный конус:</span>
@@ -561,20 +586,20 @@ export const PredictiveForecastMatrix: React.FC<PredictiveForecastMatrixProps> =
           {/* Visual Trajectory Bar: Comparison across Horizons */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
             <div className="text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
-              <span>Сводная динамика целевых уровней от текущей цены ({formatPrice(currentPriceUsd)}):</span>
+              <span>Сводная динамика целевых уровней от текущей цены ({formatDisplayPrice(effectiveBasePrice)}):</span>
               <span className="text-[11px] font-mono text-slate-400">
                 Горизонт 1H → 1Y
               </span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 text-center text-xs">
               {[...shortTerm, ...mediumLongTerm].map((h) => {
-                const diffPct = (((h.baseExpectedPriceUsd - currentPriceUsd) / currentPriceUsd) * 100);
+                const diffPct = (((h.baseExpectedPriceUsd - effectiveBasePrice) / effectiveBasePrice) * 100);
                 const isPositive = diffPct >= 0;
                 return (
                   <div key={h.id} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
                     <div className="text-[10px] font-mono text-slate-400">{h.title}</div>
                     <div className="text-xs font-bold font-mono text-white mt-0.5">
-                      {formatPrice(h.baseExpectedPriceUsd)}
+                      {formatDisplayPrice(h.baseExpectedPriceUsd)}
                     </div>
                     <div className={`text-[10px] font-mono font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {isPositive ? '+' : ''}{diffPct.toFixed(1)}%

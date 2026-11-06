@@ -1,8 +1,11 @@
-import { ArrowUpRight, ArrowDownRight, Download, SlidersHorizontal, RefreshCw, Layers, ShieldCheck, Zap } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowUpRight, ArrowDownRight, Download, SlidersHorizontal, RefreshCw, Layers, ShieldCheck, Zap, ChevronDown } from 'lucide-react';
 import { PricePoint } from '../data/silverData';
 import { InfoButton } from './HelpModal';
 import { RealtimeQuoteResponse } from '../services/marketApi';
 import { PWAInstallButton } from './PWAInstallButton';
+import { TInvestFutureInstrument } from '../data/tinkoffFuturesData';
+import { FuturesSelectorModal } from './FuturesSelectorModal';
 
 export type CurrencyUnit = 'USD_OZ' | 'EUR_OZ' | 'USD_KG' | 'RUB_G';
 
@@ -20,6 +23,8 @@ interface HeaderProps {
   onOpenOrderBook: () => void;
   onRefreshLive: () => void;
   moexCandlesCount: number;
+  selectedInstrument: TInvestFutureInstrument;
+  onSelectInstrument: (instrument: TInvestFutureInstrument) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,7 +41,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenOrderBook,
   onRefreshLive,
   moexCandlesCount,
+  selectedInstrument,
+  onSelectInstrument,
 }) => {
+  const [isFuturesModalOpen, setIsFuturesModalOpen] = useState(false);
+
   // Convert price based on selected unit
   const formatPrice = (usdOz: number): string => {
     switch (currencyUnit) {
@@ -59,10 +68,10 @@ export const Header: React.FC<HeaderProps> = ({
   }[currencyUnit];
 
   const priceDiff = currentPrice.close - previousPrice.close;
-  const pricePercent = (priceDiff / previousPrice.close) * 100;
+  const pricePercent = previousPrice.close > 0 ? (priceDiff / previousPrice.close) * 100 : 0;
   const isUp = priceDiff >= 0;
 
-  const gsr = (currentPrice.goldClose / currentPrice.close).toFixed(1);
+  const gsr = (currentPrice.goldClose / (currentPrice.close || 1)).toFixed(1);
   const dxyDiff = currentPrice.dxy - previousPrice.dxy;
   const isDxyUp = dxyDiff >= 0;
 
@@ -75,6 +84,11 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'macro_cot', label: 'Макроэкономика и COT' },
     { id: 'simulator', label: 'Сценарный Калькулятор' },
   ];
+
+  const displayPriceText =
+    selectedInstrument.unit === 'RUB/g'
+      ? `${currentPrice.close.toFixed(2)} ₽/г`
+      : formatPrice(currentPrice.close);
 
   return (
     <header className="border-b border-slate-800 bg-slate-950/90 backdrop-blur sticky top-0 z-40">
@@ -92,20 +106,32 @@ export const Header: React.FC<HeaderProps> = ({
                 <h1 className="text-lg font-bold tracking-tight text-white whitespace-nowrap">
                   Argentum Terminal
                 </h1>
-                <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                  MOEX: SVZ6
-                </span>
-                <InfoButton topicId="moex_history" title="Справка: данные Московской Биржи (MOEX ISS)" />
+
+                {/* Pop-up Futures Selector Trigger Button */}
+                <button
+                  onClick={() => setIsFuturesModalOpen(true)}
+                  title="Выбрать другой фьючерс Т-Банк Инвестиций (SVZ6, SLVRUBF, SVH7, S2Z6...)"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-cyan-950/50 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400 font-mono text-xs font-semibold shadow-sm transition-all group cursor-pointer"
+                >
+                  <span className="text-slate-400 font-normal">Фьючерс:</span>
+                  <span className="text-white font-bold">{selectedInstrument.ticker}</span>
+                  <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
+                    {selectedInstrument.unit}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-y-0.5 transition-transform" />
+                </button>
+
+                <InfoButton topicId="tinkoff_api" title="Справка: список и параметры фьючерсов Т-Банк Инвестиции" />
+
                 <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Т-Банк API: LIVE
                 </span>
-                <InfoButton topicId="tinkoff_api" title="Справка: поток котировок Т-Банк Инвестиции" />
               </div>
               <div className="text-xs text-slate-400 flex items-center gap-2">
-                <span>Фьючерс на серебро ({moexCandlesCount > 0 ? `${moexCandlesCount} сессий MOEX` : 'MOEX FORTS'})</span>
+                <span className="text-slate-300 font-medium truncate max-w-xs">{selectedInstrument.name}</span>
                 <span aria-hidden="true">·</span>
-                <span>Макроаналитика & Баланс</span>
+                <span>{selectedInstrument.expirationLabel}</span>
               </div>
             </div>
           </div>
@@ -114,9 +140,9 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center flex-wrap gap-2 text-xs">
             {/* Realtime Live Quote from T-Bank API */}
             <div className="flex items-baseline gap-2 bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-slate-800 shadow-sm">
-              <span className="text-slate-400 font-mono">SVZ6:</span>
+              <span className="text-slate-400 font-mono">{selectedInstrument.ticker}:</span>
               <span className="text-sm font-bold font-mono text-cyan-300 tabular-nums">
-                {formatPrice(currentPrice.close)}
+                {displayPriceText}
               </span>
               <span className={`inline-flex items-center font-mono font-semibold tabular-nums ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {isUp ? <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" /> : <ArrowDownRight className="w-3.5 h-3.5 mr-0.5" />}
@@ -257,6 +283,15 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
       </div>
+
+      {/* Pop-up Modal for Selecting T-Investments Futures */}
+      <FuturesSelectorModal
+        isOpen={isFuturesModalOpen}
+        onClose={() => setIsFuturesModalOpen(false)}
+        selectedInstrument={selectedInstrument}
+        onSelectInstrument={onSelectInstrument}
+        realtimeQuote={realtimeQuote}
+      />
     </header>
   );
 };

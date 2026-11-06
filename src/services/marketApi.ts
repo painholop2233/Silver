@@ -69,8 +69,11 @@ export interface MoexHistoryResponse {
 
 export type CandleInterval = '5m' | '15m' | '1h' | '4h' | '1d';
 
-export async function fetchCandles(timeframe: CandleInterval): Promise<PricePoint[]> {
-  const res = await fetch(`/api/candles?timeframe=${timeframe}`);
+export async function fetchCandles(timeframe: CandleInterval, ticker?: string): Promise<PricePoint[]> {
+  const url = ticker
+    ? `/api/candles?timeframe=${timeframe}&ticker=${encodeURIComponent(ticker)}`
+    : `/api/candles?timeframe=${timeframe}`;
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch ${timeframe} candles: ${res.statusText}`);
   }
@@ -153,8 +156,11 @@ export interface SystemDataStatus {
   systemTime: string;
 }
 
-export async function fetchLiveQuote(): Promise<RealtimeQuoteResponse> {
-  const res = await fetch('/api/realtime/quote');
+export async function fetchLiveQuote(ticker?: string): Promise<RealtimeQuoteResponse> {
+  const url = ticker
+    ? `/api/realtime/quote?ticker=${encodeURIComponent(ticker)}`
+    : '/api/realtime/quote';
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch real-time quote: ${res.statusText}`);
   }

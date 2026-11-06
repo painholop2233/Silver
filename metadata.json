@@ -1,0 +1,6 @@
+{
+  "name": "Argentum Terminal: Silver Futures & Macro Analytics",
+  "description": "Институциональный терминал для комплексного анализа цен фьючерсов на серебро (SI/XAG), волатильности, объемов торгов, корреляции с DXY, мирового баланса добычи и спроса, сезонных паттернов и макроэкономики.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

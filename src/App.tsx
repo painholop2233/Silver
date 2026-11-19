@@ -157,6 +157,7 @@ export default function App() {
           {activeTab === 'predictive_matrix' && (
             <div className="space-y-6 animate-fadeIn">
               <PredictiveForecastMatrix
+                prices={prices}
                 currentPriceUsd={currentPrice.close}
                 volatility30d={currentPrice.volatility30d || 26.5}
                 currencyUnit={currencyUnit}

@@ -367,19 +367,22 @@ export const helpTopics: Record<string, HelpTopic> = {
 
   predictive_factor_weights: {
     id: 'predictive_factor_weights',
-    title: 'Матрица фундаментальных факторов и весов',
+    title: 'Матрица фундаментальных факторов и вес Индекса Доллара (DXY)',
     category: 'Прогностическое моделирование',
-    source: 'The Silver Institute, St. Louis FRED, CFTC COT, CME Group, LBMA, Т-Банк Инвестиции.',
-    sourceUrlName: 'Quantitative Factor Matrix & Weighting',
-    formulaOrMethod: `• 6 ключевых блоков:
-  1. Реальные ставки TIPS 10Y и индекс DXY (вес 25%).
-  2. Физический дефицит, запасы COMEX/LBMA и премия SGE (вес 25%).
-  3. Отчеты CFTC COT спекулянтов Managed Money (вес 20%).
-  4. Межрыночный коэффициент Gold/Silver Ratio (GSR) (вес 15%).
-  5. Технический профиль SMA 50/200, волатильность и стакан DOM Т-Банка (вес 10%).
-  6. Сезонные циклы спроса Q4–Q1 и солнечной индустрии (вес 5%).`,
-    interpretation: 'Позволяет инвестору калибровать модель под свой профиль — от институционального макро-аналитика до краткосрочного трейдера на срочном рынке.',
-    updateFrequency: 'Интерактивная калибровка весов в интерфейсе.',
+    source: 'ICE U.S. Dollar Index (DX-Y.NYB Live), The Silver Institute, St. Louis FRED, CFTC COT, Т-Банк Инвестиции.',
+    sourceUrlName: 'Quantitative Factor Matrix & DXY Weighting',
+    formulaOrMethod: `• 7 ключевых блоков модели (сумма 100% в базе):
+  1. Индекс Доллара США DXY (вес 20%): реальные котировки DX-Y.NYB, корреляция Пирсона r и эконометрическая бета β (ΔAg% / ΔDXY%).
+  2. Реальные ставки TIPS 10Y (вес 15%).
+  3. Физический дефицит, запасы COMEX/LBMA и премия SGE (вес 25%).
+  4. Отчеты CFTC COT спекулянтов Managed Money (вес 15%).
+  5. Межрыночный коэффициент Gold/Silver Ratio (GSR) (вес 10%).
+  6. Технический профиль SMA 50/200, волатильность и стакан DOM Т-Банка (вес 10%).
+  7. Сезонные циклы спроса Q4–Q1 и солнечной индустрии (вес 5%).
+• Прямой ценовой сдвиг от DXY по каждому горизонту:
+  ΔPrice_DXY(T) = ΔDXY% · β · (Weight_DXY / Σ Weights) · Scale(T).`,
+    interpretation: 'Позволяет оценить реальное влияние доллара США на серебро и гибко регулировать вес DXY в прогнозе — от 0% (фокус только на металле) до 60% (валютный стресс-тест).',
+    updateFrequency: 'Интерактивная калибровка весов в реальном времени.',
   },
 
   predictive_short_term_forecast: {

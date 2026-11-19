@@ -25,26 +25,29 @@ export const DxyCorrelationView: React.FC<DxyCorrelationViewProps> = ({ prices }
     return calculatePearsonCorrelation(silverCloses, dxyCloses);
   }, [dataset]);
 
-  // Daily % changes for scatter plot
+  // Daily % changes for scatter plot (only sessions where DXY traded so weekend MOEX bars do not distort OLS)
   const scatterPoints = useMemo(() => {
     const points: { date: string; dxyPct: number; silverPct: number }[] = [];
     for (let i = 1; i < dataset.length; i++) {
       const prev = dataset[i - 1];
       const curr = dataset[i];
+      if (!prev.dxy || !prev.close) continue;
       const dxyPct = ((curr.dxy - prev.dxy) / prev.dxy) * 100;
       const silverPct = ((curr.close - prev.close) / prev.close) * 100;
-      points.push({
-        date: curr.date,
-        dxyPct: Number(dxyPct.toFixed(2)),
-        silverPct: Number(silverPct.toFixed(2)),
-      });
+      if (Math.abs(dxyPct) > 0.0001) {
+        points.push({
+          date: curr.date,
+          dxyPct: Number(dxyPct.toFixed(2)),
+          silverPct: Number(silverPct.toFixed(2)),
+        });
+      }
     }
     return points;
   }, [dataset]);
 
   // Linear Regression (y = mx + b) for Scatter Plot
   const regression = useMemo(() => {
-    if (scatterPoints.length < 2) return { slope: -1.8, intercept: 0.05, r2: 0.45 };
+    if (scatterPoints.length < 3) return { slope: -1.8, intercept: 0.05, r2: 0.45, r: -0.67 };
     const n = scatterPoints.length;
     let sumX = 0;
     let sumY = 0;
@@ -60,13 +63,14 @@ export const DxyCorrelationView: React.FC<DxyCorrelationViewProps> = ({ prices }
       sumY2 += p.silverPct * p.silverPct;
     });
 
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const denom = n * sumX2 - sumX * sumX;
+    const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : -1.8;
     const intercept = (sumY - slope * sumX) / n;
 
     // R-squared
     const num = (n * sumXY - sumX * sumY);
     const den = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
-    const r = den !== 0 ? num / den : 0;
+    const r = den > 0 ? num / den : 0;
     const r2 = r * r;
 
     return {

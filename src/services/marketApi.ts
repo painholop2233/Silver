@@ -26,6 +26,18 @@ export interface RealtimeQuoteResponse {
     price: number;
     unit: string;
   };
+  dxyQuote?: {
+    ticker: string;
+    price: number;
+    prevClose: number;
+    changePct: number;
+    change30dPct: number;
+    sma50: number;
+    sma200: number;
+    high52w: number;
+    low52w: number;
+    timestamp: string;
+  };
   orderBook: {
     instrument: string;
     depth: number;

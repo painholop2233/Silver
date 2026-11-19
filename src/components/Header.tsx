@@ -72,7 +72,11 @@ export const Header: React.FC<HeaderProps> = ({
   const isUp = priceDiff >= 0;
 
   const gsr = (currentPrice.goldClose / (currentPrice.close || 1)).toFixed(1);
-  const dxyDiff = currentPrice.dxy - previousPrice.dxy;
+  const liveDxyVal = realtimeQuote?.dxyQuote?.price ?? currentPrice.dxy;
+  const dxyDiff =
+    realtimeQuote?.dxyQuote?.prevClose !== undefined
+      ? liveDxyVal - realtimeQuote.dxyQuote.prevClose
+      : currentPrice.dxy - previousPrice.dxy;
   const isDxyUp = dxyDiff >= 0;
 
   const navTabs = [
@@ -201,7 +205,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* DXY Index */}
             <div className="hidden md:flex items-baseline gap-1.5 bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
               <span className="text-slate-400">DXY:</span>
-              <span className="font-mono font-bold text-slate-200 tabular-nums">{currentPrice.dxy}</span>
+              <span className="font-mono font-bold text-amber-300 tabular-nums">{liveDxyVal.toFixed(2)}</span>
               <span className={`font-mono text-[11px] tabular-nums ${isDxyUp ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {isDxyUp ? '+' : ''}{dxyDiff.toFixed(2)}
               </span>
